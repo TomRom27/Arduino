@@ -1,8 +1,9 @@
 /********************************************************************/
-// First we include the libraries
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
+
+#include "max6675.h"
 
 /********************************************************************/
 // Used for de- and serialization to json
@@ -10,6 +11,7 @@ const char func_field[] = "func";
 const char value_field[] = "value";
 const char active_field[] = "active";
 const char temp_func[] = "temp";
+const char hi_temp_func[] = "hi-temp";
 
 //{"func":"temp","active":"true"}
 //{"func":"temp","active":"false"}
@@ -48,37 +50,65 @@ void readTempAndOutput(void)
   Serial.println("");
 }
 
+// hi Temp related
+int ktcSO = 8;
+int ktcCS = 9;
+#define ktcCLK 10
+//#define ONE_WIRE_BUS 2
+
+bool readHiTemp = true;
+MAX6675 ktc(ktcCLK, ktcCS, ktcSO);
+
+void readHiTempAndOutput(void)
+{
+  tempJson[func_field] = hi_temp_func;
+  tempJson[value_field] = ktc.readCelsius();
+  tempJson[active_field] = readHiTemp;
+  tempJson.printTo(Serial);
+  Serial.println("");
+}
+
+
+//
+
 void processInput(String inputLine)
 {
   StaticJsonBuffer<100> jb;
-    // we expect something like that
-    // {"func":"temp","active":"true"}
-    // {"func":"temp","active":"false"}
-    
-    JsonObject& obj = jb.parseObject(inputLine);
-    if (obj.success()) {
-      const char* func = obj.get<char*>(func_field);
-      bool active = obj.get<bool>(active_field);
+  // we expect something like that
+  // {"func":"temp","active":"true"}
+  // {"func":"temp","active":"false"}
 
-      if (strcmp(func,temp_func)==0) {
-        if (active) {
-          readTemp = true;
-        }
-        else {
-          readTemp = false;
-        }
+  JsonObject& obj = jb.parseObject(inputLine);
+  if (obj.success()) {
+    const char* func = obj.get<char*>(func_field);
+    bool active = obj.get<bool>(active_field);
+
+    if (strcmp(func, temp_func) == 0) {
+      if (active) {
+        readTemp = true;
       }
-      Serial.print("f is=");
-      Serial.print(func);
-      Serial.print(" and a is=");
-      Serial.print(active);
-      Serial.println();
+      else {
+        readTemp = false;
+      }
+    } else if (strcmp(func, hi_temp_func) == 0) {
+      if (active) {
+        readHiTemp = true;
+      }
+      else {
+        readHiTemp = false;
+      }
     }
-    else {
-      Serial.print("parsing failed");//log
-      Serial.print(inputLine);
-      Serial.println();
-    }
+    Serial.print("f is=");
+    Serial.print(func);
+    Serial.print(" and a is=");
+    Serial.print(active);
+    Serial.println();
+  }
+  else {
+    Serial.print("parsing failed");//log
+    Serial.print(inputLine);
+    Serial.println();
+  }
 }
 
 void setup(void)
@@ -92,13 +122,16 @@ void setup(void)
 
 void loop(void)
 {
-    // each input must end with end of line
-    if(Serial.available()){
-      processInput(Serial.readStringUntil("\n"));
-    }
+  // each input must end with end of line
+  if (Serial.available()) {
+    processInput(Serial.readStringUntil("\n"));
+  }
 
   if (readTemp) {
     readTempAndOutput();
+  };
+  if (readHiTemp) {
+    readHiTempAndOutput();
   }
 
   delay(500);
